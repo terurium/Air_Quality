@@ -13,3 +13,5 @@
 ## python/
 
 * air_quality_logger.py: `Micro_Serial_CCS811_BME280` の出力を受信し、タイムスタンプ付きでCSVファイルに追記するロガースクリプト。`pip install pyserial` が必要。
+
+* dashboard.py: `air_quality_logger.py` が書き出した CSV の直近24時間分を10分平均でターミナルグラフ表示し、天気予報CLI (`stormshell --location "Nagoya"`) と3分ごとに交互表示するダッシュボード。`pip install plotext` と `stormshell` が必要。
