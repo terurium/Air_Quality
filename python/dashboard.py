@@ -28,7 +28,6 @@ BUCKET_MINUTES = 10
 WINDOW_HOURS = 24
 SWITCH_INTERVAL_SEC = 180  # 3分
 STORMSHELL_CMD = ["stormshell", "--location", "Nagoya"]
-STORMSHELL_TIMEOUT_SEC = 60
 
 
 def load_recent_rows(csv_path: str, window: datetime.timedelta) -> list[tuple[datetime.datetime, list[float]]]:
@@ -128,35 +127,44 @@ def render_graph(csv_path: str) -> None:
     )
 
 
-def render_stormshell() -> None:
-    """stormshell を実行して天気予報を表示。"""
+def render_stormshell(display_sec: int) -> None:
+    """stormshell を起動し、display_sec 経過後に終了させる。
+
+    stormshell は自動終了しない TUI 的な挙動のため、表示時間 =
+    切替間隔として扱い、次の画面に切り替える直前に terminate する。
+    """
     try:
-        result = subprocess.run(
-            STORMSHELL_CMD,
-            timeout=STORMSHELL_TIMEOUT_SEC,
-            check=False,
-        )
-        if result.returncode != 0:
-            print(
-                f"\n(stormshell が非ゼロ終了: returncode={result.returncode})",
-                file=sys.stderr,
-            )
+        proc = subprocess.Popen(STORMSHELL_CMD)
     except FileNotFoundError:
         print("stormshell が見つかりません。インストールしてください。", file=sys.stderr)
+        time.sleep(display_sec)
+        return
+
+    try:
+        proc.wait(timeout=display_sec)
     except subprocess.TimeoutExpired:
-        print("stormshell がタイムアウトしました。", file=sys.stderr)
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 def clear_screen() -> None:
     os.system("clear" if os.name != "nt" else "cls")
 
 
+def render_graph_and_wait(csv_path: str, display_sec: int) -> None:
+    render_graph(csv_path)
+    time.sleep(display_sec)
+
+
 def main() -> None:
     csv_path = sys.argv[1] if len(sys.argv) >= 2 else DEFAULT_CSV
 
     renderers = [
-        ("Stormshell (Nagoya)", render_stormshell),
-        ("Air Quality (24h / 10min avg)", lambda: render_graph(csv_path)),
+        ("Stormshell (Nagoya)", lambda: render_stormshell(SWITCH_INTERVAL_SEC)),
+        ("Air Quality (24h / 10min avg)", lambda: render_graph_and_wait(csv_path, SWITCH_INTERVAL_SEC)),
     ]
     idx = 0
 
@@ -167,7 +175,6 @@ def main() -> None:
             print(f"=== {label} ===  (次の切替まで {SWITCH_INTERVAL_SEC}秒)")
             fn()
             idx = (idx + 1) % len(renderers)
-            time.sleep(SWITCH_INTERVAL_SEC)
     except KeyboardInterrupt:
         print("\n終了します")
 
