@@ -127,14 +127,29 @@ def render_graph(csv_path: str) -> None:
     )
 
 
+def _terminate(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
 def render_stormshell(display_sec: int) -> None:
     """stormshell を起動し、display_sec 経過後に終了させる。
 
-    stormshell は自動終了しない TUI 的な挙動のため、表示時間 =
-    切替間隔として扱い、次の画面に切り替える直前に terminate する。
+    stdin を切り離し、新しいプロセスグループで起動することで、
+    端末からの Ctrl+C は Python 側に届くようにする (stormshell が
+    raw モードで端末を掴んでも Ctrl+C が効くようにするため)。
     """
     try:
-        proc = subprocess.Popen(STORMSHELL_CMD)
+        proc = subprocess.Popen(
+            STORMSHELL_CMD,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
     except FileNotFoundError:
         print("stormshell が見つかりません。インストールしてください。", file=sys.stderr)
         time.sleep(display_sec)
@@ -143,11 +158,10 @@ def render_stormshell(display_sec: int) -> None:
     try:
         proc.wait(timeout=display_sec)
     except subprocess.TimeoutExpired:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        _terminate(proc)
+    except KeyboardInterrupt:
+        _terminate(proc)
+        raise
 
 
 def clear_screen() -> None:
