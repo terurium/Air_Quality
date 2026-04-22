@@ -108,16 +108,18 @@ def render_graph(csv_path: str) -> None:
         ("TVOC (ppb)", tvoc, "magenta"),
     ]
 
+    tick_indices = [i for i, t in enumerate(times) if t.hour % 3 == 0 and t.minute == 0]
+    if not tick_indices:
+        tick_indices = [0, len(times) // 2, len(times) - 1]
+    tick_labels = [time_labels[i] for i in tick_indices]
+
     for idx, (title, series, color) in enumerate(metrics):
         row = idx // 2 + 1
         col = idx % 2 + 1
         plt.subplot(row, col)
         plt.plot(series, color=color)
         plt.title(title)
-        if len(time_labels) > 0:
-            ticks = [0, len(time_labels) // 2, len(time_labels) - 1]
-            labels = [time_labels[i] for i in ticks]
-            plt.xticks(ticks, labels)
+        plt.xticks(tick_indices, tick_labels)
 
     plt.show()
     print(
